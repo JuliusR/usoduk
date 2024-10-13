@@ -174,6 +174,7 @@ const BoardButton: React.FC<{
       onClick={handleClick}
       disabled={activeDigit === null}
       variant={variant}
+      sx={{ minWidth: "1em", padding: 0 }}
     >
       {value}
     </Button>
