@@ -1,26 +1,35 @@
 import React from "react";
-import logo from "./logo.svg";
-import "./App.css";
+import { Container, ToggleButton, ToggleButtonGroup } from "@mui/material";
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+type ActiveDigit = null | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+export const App: React.FC = () => {
+  const [activeDigit, setActiveDigit] = React.useState<ActiveDigit>(null);
+
+  const handleActiveDigitChange = React.useCallback(
+    (e: React.BaseSyntheticEvent, digit: ActiveDigit) => {
+      e.stopPropagation();
+      e.preventDefault();
+      setActiveDigit(digit);
+    },
+    [setActiveDigit],
   );
-}
 
-export default App;
+  return (
+    <Container>
+      <ToggleButtonGroup
+        exclusive
+        value={activeDigit}
+        onChange={handleActiveDigitChange}
+        size="large"
+        color="primary"
+      >
+        {[...Array(9)].map((_, idx) => (
+          <ToggleButton key={`digit_${idx + 1}`} value={idx + 1}>
+            {idx + 1}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+    </Container>
+  );
+};
