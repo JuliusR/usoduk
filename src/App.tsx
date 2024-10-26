@@ -15,7 +15,8 @@ import AppRegistrationIcon from "@mui/icons-material/AppRegistration";
 import SaveIcon from "@mui/icons-material/Save";
 import SaveAsIcon from "@mui/icons-material/SaveAs";
 import { FullscreenToggleButton } from "./FullscreenToggleButton";
-import { usePersistentState } from "./usePersistentState";
+import { usePersistentReducer } from "./usePersistentReducer";
+import { neverIdentity } from "./neverIdentity";
 
 type Digit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -29,10 +30,46 @@ const newBoardRow = () => [...Array(9)].map((_) => null) as BoardRow;
 
 const newBoard = () => [...Array(9)].map((_) => newBoardRow()) as Board;
 
+type BoardCellDigitToggleAction = {
+  type: "digit_toggle";
+  rowIdx: number;
+  colIdx: number;
+  activeDigit: Digit;
+};
+
+type BoardResetAction = {
+  type: "reset";
+};
+
+type BoardAction = BoardCellDigitToggleAction | BoardResetAction;
+
+function boardReducer(prev: Board, action: BoardAction) {
+  switch (action.type) {
+    case "digit_toggle":
+      const prevRow = prev[action.rowIdx];
+      const prevDigit = prevRow[action.colIdx];
+      const nextDigit =
+        prevDigit === action.activeDigit ? null : action.activeDigit;
+      const nextRow = prevRow.map((digit, colIdx) =>
+        colIdx !== action.colIdx ? digit : nextDigit,
+      );
+      return prev.map((row, rowIdx) =>
+        rowIdx !== action.rowIdx ? row : nextRow,
+      ) as Board;
+    case "reset":
+      return newBoard();
+  }
+  return neverIdentity(action);
+}
+
 export const App: React.FC = () => {
   const [activeDigit, setActiveDigit] = React.useState<null | Digit>(null);
 
-  const [board, setBoard] = usePersistentState<Board>("board", newBoard);
+  const [board, dispatch] = usePersistentReducer(
+    "board",
+    boardReducer,
+    newBoard,
+  );
 
   const handleActiveDigitChange = React.useCallback(
     (e: React.BaseSyntheticEvent, digit: null | Digit) => {
@@ -49,9 +86,9 @@ export const App: React.FC = () => {
     (e: React.BaseSyntheticEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setBoard(newBoard());
+      dispatch({ type: "reset" });
     },
-    [setBoard],
+    [dispatch],
   );
 
   return (
@@ -102,7 +139,7 @@ export const App: React.FC = () => {
                     key={`subRow_${subRowIdx}`}
                     rowIdx={rowGroupIdx * 3 + subRowIdx}
                     boardRow={board[rowGroupIdx * 3 + subRowIdx]}
-                    setBoard={setBoard}
+                    dispatch={dispatch}
                     activeDigit={activeDigit}
                   ></BoardTableRow>
                 ))}
@@ -140,25 +177,10 @@ export const App: React.FC = () => {
 const BoardTableRow: React.FC<{
   rowIdx: number;
   boardRow: RepNine<null | Digit>;
-  setBoard: React.Dispatch<React.SetStateAction<Board>>;
+  dispatch: React.Dispatch<BoardAction>;
   activeDigit: null | Digit;
 }> = (props) => {
-  const { rowIdx, boardRow, setBoard, activeDigit } = props;
-
-  const setBoardRow = React.useCallback(
-    (action: React.SetStateAction<BoardRow>) => {
-      setBoard((prevBoard) => {
-        const prevBoardRow = prevBoard[rowIdx];
-        const nextBoardRow =
-          action instanceof Function ? action(prevBoardRow) : action;
-        if (nextBoardRow === prevBoardRow) return prevBoard;
-        return prevBoard.map((row, idx) =>
-          idx !== rowIdx ? row : nextBoardRow,
-        ) as Board;
-      });
-    },
-    [rowIdx, setBoard],
-  );
+  const { rowIdx, boardRow, dispatch, activeDigit } = props;
 
   return (
     <TableRow>
@@ -168,7 +190,7 @@ const BoardTableRow: React.FC<{
             rowIdx={rowIdx}
             colIdx={colIdx}
             value={boardRow[colIdx]}
-            setBoardRow={setBoardRow}
+            dispatch={dispatch}
             activeDigit={activeDigit}
           ></BoardButton>
         </TableCell>
@@ -181,33 +203,19 @@ const BoardButton: React.FC<{
   rowIdx: number;
   colIdx: number;
   value: null | Digit;
-  setBoardRow: React.Dispatch<React.SetStateAction<BoardRow>>;
+  dispatch: React.Dispatch<BoardAction>;
   activeDigit: null | Digit;
 }> = (props) => {
-  const { colIdx, value, setBoardRow, activeDigit } = props;
-
-  const setValue = React.useCallback(
-    (action: React.SetStateAction<null | Digit>) => {
-      setBoardRow((prevBoardRow) => {
-        const prevValue = prevBoardRow[colIdx];
-        const nextValue =
-          action instanceof Function ? action(prevValue) : action;
-        if (nextValue === prevValue) return prevBoardRow;
-        return prevBoardRow.map((val, idx) =>
-          idx !== colIdx ? val : nextValue,
-        ) as BoardRow;
-      });
-    },
-    [colIdx, setBoardRow],
-  );
+  const { rowIdx, colIdx, value, dispatch, activeDigit } = props;
 
   const handleClick = React.useCallback(
     (e: React.BaseSyntheticEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      setValue((prevValue) => (prevValue === activeDigit ? null : activeDigit));
+      if (activeDigit === null) return;
+      dispatch({ type: "digit_toggle", rowIdx, colIdx, activeDigit });
     },
-    [setValue, activeDigit],
+    [dispatch, rowIdx, colIdx, activeDigit],
   );
 
   const variant = value === activeDigit ? "contained" : "text";
