@@ -26,6 +26,7 @@ export const FullscreenToggleButton: React.FC = (props) => {
   return (
     <Button
       onClick={isFullscreen ? handle.exitFullscreen : handle.enterFullscreen}
+      variant="outlined"
     >
       {isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
     </Button>

@@ -1,7 +1,6 @@
 import React from "react";
 import {
   Button,
-  ButtonGroup,
   Container,
   Stack,
   Table,
@@ -16,6 +15,7 @@ import AppRegistrationIcon from "@mui/icons-material/AppRegistration";
 import SaveIcon from "@mui/icons-material/Save";
 import SaveAsIcon from "@mui/icons-material/SaveAs";
 import { FullscreenToggleButton } from "./FullscreenToggleButton";
+import { usePersistentState } from "./usePersistentState";
 
 type Digit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -32,7 +32,7 @@ const newBoard = () => [...Array(9)].map((_) => newBoardRow()) as Board;
 export const App: React.FC = () => {
   const [activeDigit, setActiveDigit] = React.useState<null | Digit>(null);
 
-  const [board, setBoard] = React.useState<Board>(newBoard);
+  const [board, setBoard] = usePersistentState<Board>("board", newBoard);
 
   const handleActiveDigitChange = React.useCallback(
     (e: React.BaseSyntheticEvent, digit: null | Digit) => {
@@ -45,6 +45,15 @@ export const App: React.FC = () => {
     [setActiveDigit],
   );
 
+  const handleNew = React.useCallback(
+    (e: React.BaseSyntheticEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setBoard(newBoard());
+    },
+    [setBoard],
+  );
+
   return (
     <Container
       sx={{
@@ -54,18 +63,18 @@ export const App: React.FC = () => {
       }}
     >
       <Stack spacing={1}>
-        <ButtonGroup sx={{ justifyContent: "space-between" }}>
-          <Button disabled>
+        <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+          <Button onClick={handleNew} variant="outlined">
             <NewIcon />
           </Button>
-          <Button disabled>
+          <Button disabled variant="outlined">
             <SaveIcon />
           </Button>
-          <Button disabled>
+          <Button disabled variant="outlined">
             <SaveAsIcon />
           </Button>
           <FullscreenToggleButton />
-        </ButtonGroup>
+        </Stack>
         <TableContainer>
           <Table
             size="small"
