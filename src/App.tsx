@@ -1,15 +1,21 @@
 import React from "react";
 import {
   Button,
+  ButtonGroup,
   Container,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableRow,
   ToggleButton,
-  ToggleButtonGroup,
 } from "@mui/material";
+import NewIcon from "@mui/icons-material/AddCircleOutline";
+import AppRegistrationIcon from "@mui/icons-material/AppRegistration";
+import SaveIcon from "@mui/icons-material/Save";
+import SaveAsIcon from "@mui/icons-material/SaveAs";
+import { FullscreenToggleButton } from "./FullscreenToggleButton";
 
 type Digit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -32,64 +38,92 @@ export const App: React.FC = () => {
     (e: React.BaseSyntheticEvent, digit: null | Digit) => {
       e.stopPropagation();
       e.preventDefault();
-      setActiveDigit(digit);
+      setActiveDigit((prev) => {
+        return digit === prev ? null : digit;
+      });
     },
     [setActiveDigit],
   );
 
   return (
-    <Container>
-      <ToggleButtonGroup
-        exclusive
-        value={activeDigit}
-        onChange={handleActiveDigitChange}
-        color="primary"
-      >
-        {[...Array(9)].map((_, idx) => (
-          <ToggleButton
-            key={`digit_${idx + 1}`}
-            value={idx + 1}
-            sx={{ height: "7vmin", aspectRatio: 1 }}
+    <Container
+      sx={{
+        aspectRatio: 0.7,
+        width: "auto",
+        maxHeight: "98vh",
+      }}
+    >
+      <Stack spacing={1}>
+        <ButtonGroup sx={{ justifyContent: "space-between" }}>
+          <Button disabled>
+            <NewIcon />
+          </Button>
+          <Button disabled>
+            <SaveIcon />
+          </Button>
+          <Button disabled>
+            <SaveAsIcon />
+          </Button>
+          <FullscreenToggleButton />
+        </ButtonGroup>
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              maxWidth: "90vmin",
+              borderCollapse: "collapse",
+              "& td": { border: "1px solid gray", padding: "1px" },
+              "& tbody": { border: "3px solid black" },
+              "& colgroup": { border: "3px solid black" },
+              "& td > button": {
+                aspectRatio: 1,
+                width: "100%",
+              },
+            }}
           >
-            {idx + 1}
+            {[...Array(3)].map((_, colGroupIdx) => (
+              <colgroup key={`colGroup_${colGroupIdx}`}>
+                <col span={3} />
+              </colgroup>
+            ))}
+            {[...Array(3)].map((_, rowGroupIdx) => (
+              <TableBody key={`rowGroup_${rowGroupIdx}`}>
+                {[...Array(3)].map((_, subRowIdx) => (
+                  <BoardTableRow
+                    key={`subRow_${subRowIdx}`}
+                    rowIdx={rowGroupIdx * 3 + subRowIdx}
+                    boardRow={board[rowGroupIdx * 3 + subRowIdx]}
+                    setBoard={setBoard}
+                    activeDigit={activeDigit}
+                  ></BoardTableRow>
+                ))}
+              </TableBody>
+            ))}
+          </Table>
+        </TableContainer>
+        <Stack direction="row" sx={{ flexWrap: "wrap" }}>
+          {[...Array(9)].map((_, idx) => (
+            <ToggleButton
+              key={`digit_${idx + 1}`}
+              value={idx + 1}
+              selected={activeDigit === idx + 1}
+              sx={{ width: "20%", aspectRatio: 1 }}
+              onChange={handleActiveDigitChange}
+              color="primary"
+            >
+              {idx + 1}
+            </ToggleButton>
+          ))}
+          <ToggleButton
+            value={10}
+            sx={{ width: "20%", aspectRatio: 1 }}
+            color="primary"
+            disabled
+          >
+            <AppRegistrationIcon />
           </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
-      <TableContainer>
-        <Table
-          size="small"
-          sx={{
-            maxWidth: "90vmin",
-            borderCollapse: "collapse",
-            "& td": { border: "1px solid gray", padding: "1px" },
-            "& tbody": { border: "3px solid black" },
-            "& colgroup": { border: "3px solid black" },
-            "& td > button": {
-              aspectRatio: 1,
-              width: "100%",
-            },
-          }}
-        >
-          {[...Array(3)].map((_, colGroupIdx) => (
-            <colgroup key={`colGroup_${colGroupIdx}`}>
-              <col span={3} />
-            </colgroup>
-          ))}
-          {[...Array(3)].map((_, rowGroupIdx) => (
-            <TableBody key={`rowGroup_${rowGroupIdx}`}>
-              {[...Array(3)].map((_, subRowIdx) => (
-                <BoardTableRow
-                  key={`subRow_${subRowIdx}`}
-                  rowIdx={rowGroupIdx * 3 + subRowIdx}
-                  boardRow={board[rowGroupIdx * 3 + subRowIdx]}
-                  setBoard={setBoard}
-                  activeDigit={activeDigit}
-                ></BoardTableRow>
-              ))}
-            </TableBody>
-          ))}
-        </Table>
-      </TableContainer>
+        </Stack>
+      </Stack>
     </Container>
   );
 };
