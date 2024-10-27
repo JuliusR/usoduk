@@ -12,11 +12,20 @@ import {
 } from "@mui/material";
 import NewIcon from "@mui/icons-material/AddCircleOutline";
 import AppRegistrationIcon from "@mui/icons-material/AppRegistration";
+import RedoIcon from "@mui/icons-material/Redo";
 import SaveIcon from "@mui/icons-material/Save";
 import SaveAsIcon from "@mui/icons-material/SaveAs";
+import UndoIcon from "@mui/icons-material/Undo";
 import { FullscreenToggleButton } from "./FullscreenToggleButton";
 import { usePersistentReducer } from "./usePersistentReducer";
 import { neverIdentity } from "./neverIdentity";
+import {
+  History,
+  newHistory,
+  advanceHistory,
+  redoHistory,
+  undoHistory,
+} from "./history";
 
 type Digit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -26,9 +35,17 @@ type BoardRow = RepNine<null | Digit>;
 
 type Board = RepNine<BoardRow>;
 
+type Game = {
+  board: History<Board>;
+};
+
 const newBoardRow = () => [...Array(9)].map((_) => null) as BoardRow;
 
 const newBoard = () => [...Array(9)].map((_) => newBoardRow()) as Board;
+
+const newGame = (): Game => ({
+  board: newHistory(newBoard()),
+});
 
 type BoardCellDigitToggleAction = {
   type: "digit_toggle";
@@ -37,27 +54,67 @@ type BoardCellDigitToggleAction = {
   activeDigit: Digit;
 };
 
+type BoardRedoAction = {
+  type: "redo";
+};
+
 type BoardResetAction = {
   type: "reset";
 };
 
-type BoardAction = BoardCellDigitToggleAction | BoardResetAction;
+type BoardUndoAction = {
+  type: "undo";
+};
 
-function boardReducer(prev: Board, action: BoardAction) {
+type BoardAction =
+  | BoardCellDigitToggleAction
+  | BoardRedoAction
+  | BoardResetAction
+  | BoardUndoAction;
+
+function reduceDigitToggle(
+  prev: Game,
+  action: BoardCellDigitToggleAction,
+): Game {
+  const prevRow = prev.board.present[action.rowIdx];
+  const prevDigit = prevRow[action.colIdx];
+  const nextDigit =
+    prevDigit === action.activeDigit ? null : action.activeDigit;
+  const nextRow = prevRow.map((digit, colIdx) =>
+    colIdx !== action.colIdx ? digit : nextDigit,
+  );
+  const board = prev.board.present.map((row, rowIdx) =>
+    rowIdx !== action.rowIdx ? row : nextRow,
+  ) as Board;
+  return {
+    board: advanceHistory(prev.board, board),
+  };
+}
+
+function reduceRedo(prev: Game, action: BoardRedoAction): Game {
+  return { board: redoHistory(prev.board) };
+}
+
+function reduceReset(prev: Game, action: BoardResetAction): Game {
+  return {
+    board: advanceHistory(prev.board, newBoard()),
+  };
+}
+
+function reduceUndo(prev: Game, action: BoardUndoAction): Game {
+  return { board: undoHistory(prev.board) };
+}
+
+function gameReducer(prev: Game, action: BoardAction): Game {
   switch (action.type) {
     case "digit_toggle":
-      const prevRow = prev[action.rowIdx];
-      const prevDigit = prevRow[action.colIdx];
-      const nextDigit =
-        prevDigit === action.activeDigit ? null : action.activeDigit;
-      const nextRow = prevRow.map((digit, colIdx) =>
-        colIdx !== action.colIdx ? digit : nextDigit,
-      );
-      return prev.map((row, rowIdx) =>
-        rowIdx !== action.rowIdx ? row : nextRow,
-      ) as Board;
+      return reduceDigitToggle(prev, action);
+    case "redo":
+      return reduceRedo(prev, action);
     case "reset":
-      return newBoard();
+      return reduceReset(prev, action);
+    case "undo":
+      return reduceUndo(prev, action);
   }
   return neverIdentity(action);
 }
@@ -65,11 +122,7 @@ function boardReducer(prev: Board, action: BoardAction) {
 export const App: React.FC = () => {
   const [activeDigit, setActiveDigit] = React.useState<null | Digit>(null);
 
-  const [board, dispatch] = usePersistentReducer(
-    "board",
-    boardReducer,
-    newBoard,
-  );
+  const [game, dispatch] = usePersistentReducer("game1", gameReducer, newGame);
 
   const handleActiveDigitChange = React.useCallback(
     (e: React.BaseSyntheticEvent, digit: null | Digit) => {
@@ -91,6 +144,24 @@ export const App: React.FC = () => {
     [dispatch],
   );
 
+  const handleUndo = React.useCallback(
+    (e: React.BaseSyntheticEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dispatch({ type: "undo" });
+    },
+    [dispatch],
+  );
+
+  const handleRedo = React.useCallback(
+    (e: React.BaseSyntheticEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dispatch({ type: "redo" });
+    },
+    [dispatch],
+  );
+
   return (
     <Container
       sx={{
@@ -103,6 +174,20 @@ export const App: React.FC = () => {
         <Stack direction="row" sx={{ justifyContent: "space-between" }}>
           <Button onClick={handleNew} variant="outlined">
             <NewIcon />
+          </Button>
+          <Button
+            disabled={!game.board.past.length}
+            onClick={handleUndo}
+            variant="outlined"
+          >
+            <UndoIcon />
+          </Button>
+          <Button
+            disabled={!game.board.future.length}
+            onClick={handleRedo}
+            variant="outlined"
+          >
+            <RedoIcon />
           </Button>
           <Button disabled variant="outlined">
             <SaveIcon />
@@ -138,7 +223,7 @@ export const App: React.FC = () => {
                   <BoardTableRow
                     key={`subRow_${subRowIdx}`}
                     rowIdx={rowGroupIdx * 3 + subRowIdx}
-                    boardRow={board[rowGroupIdx * 3 + subRowIdx]}
+                    boardRow={game.board.present[rowGroupIdx * 3 + subRowIdx]}
                     dispatch={dispatch}
                     activeDigit={activeDigit}
                   ></BoardTableRow>
