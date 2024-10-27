@@ -31,7 +31,52 @@ type Digit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 type RepNine<T> = [T, T, T, T, T, T, T, T, T];
 
-type BoardRow = RepNine<null | Digit>;
+type BoardRow = RepNine<number>;
+
+function testMarker(value: number, digit: Digit): boolean {
+  return !!(value & (8 << digit));
+}
+
+function addMarker(value: number, digit: Digit): number {
+  return value | (8 << digit);
+}
+
+function clearMarker(value: number, digit: Digit): number {
+  return value & ~(8 << digit);
+}
+
+function flipMarker(value: number, digit: Digit): number {
+  return value ^ (8 << digit);
+}
+
+function setMarker(value: number, digit: Digit, nextState: boolean): number {
+  return nextState ? addMarker(value, digit) : clearMarker(value, digit);
+}
+
+function getMarkerBits(value: number): number {
+  const markerMask = (1 << 9) - 1;
+  return (value >>> 4) & markerMask;
+}
+
+function getDigit(value: number): null | Digit {
+  const digit = value & 15;
+  return digit >= 1 && digit <= 9 ? (digit as Digit) : null;
+}
+
+function setDigit(value: number, digit: null | Digit): number {
+  value &= ~15;
+  if (digit === null) return value;
+  value |= digit;
+  return value;
+}
+
+function tweakRow(
+  prevRow: BoardRow,
+  colIdx: number,
+  nextValue: number,
+): BoardRow {
+  return prevRow.map((val, i) => (i !== colIdx ? val : nextValue)) as BoardRow;
+}
 
 type Board = RepNine<BoardRow>;
 
@@ -39,7 +84,7 @@ type Game = {
   board: History<Board>;
 };
 
-const newBoardRow = () => [...Array(9)].map((_) => null) as BoardRow;
+const newBoardRow = () => [...Array(9)].map((_) => 0) as BoardRow;
 
 const newBoard = () => [...Array(9)].map((_) => newBoardRow()) as Board;
 
@@ -52,6 +97,7 @@ type BoardCellDigitToggleAction = {
   rowIdx: number;
   colIdx: number;
   activeDigit: Digit;
+  isCommiting: boolean;
 };
 
 type BoardRedoAction = {
@@ -77,12 +123,14 @@ function reduceDigitToggle(
   action: BoardCellDigitToggleAction,
 ): Game {
   const prevRow = prev.board.present[action.rowIdx];
-  const prevDigit = prevRow[action.colIdx];
-  const nextDigit =
-    prevDigit === action.activeDigit ? null : action.activeDigit;
-  const nextRow = prevRow.map((digit, colIdx) =>
-    colIdx !== action.colIdx ? digit : nextDigit,
-  );
+  const prevValue = prevRow[action.colIdx];
+  const nextValue = (() => {
+    if (!action.isCommiting) return flipMarker(prevValue, action.activeDigit);
+    return action.activeDigit === getDigit(prevValue)
+      ? setDigit(prevValue, null)
+      : setDigit(prevValue, action.activeDigit);
+  })();
+  const nextRow = tweakRow(prevRow, action.colIdx, nextValue);
   const board = prev.board.present.map((row, rowIdx) =>
     rowIdx !== action.rowIdx ? row : nextRow,
   ) as Board;
@@ -121,8 +169,9 @@ function gameReducer(prev: Game, action: BoardAction): Game {
 
 export const App: React.FC = () => {
   const [activeDigit, setActiveDigit] = React.useState<null | Digit>(null);
+  const [isCommiting, setIsCommiting] = React.useState<boolean>(true);
 
-  const [game, dispatch] = usePersistentReducer("game1", gameReducer, newGame);
+  const [game, dispatch] = usePersistentReducer("game2", gameReducer, newGame);
 
   const handleActiveDigitChange = React.useCallback(
     (e: React.BaseSyntheticEvent, digit: null | Digit) => {
@@ -160,6 +209,15 @@ export const App: React.FC = () => {
       dispatch({ type: "redo" });
     },
     [dispatch],
+  );
+
+  const handleIsCommitingChange = React.useCallback(
+    (e: React.BaseSyntheticEvent, value: boolean) => {
+      e.stopPropagation();
+      e.preventDefault();
+      setIsCommiting(value);
+    },
+    [setIsCommiting],
   );
 
   return (
@@ -226,6 +284,7 @@ export const App: React.FC = () => {
                     boardRow={game.board.present[rowGroupIdx * 3 + subRowIdx]}
                     dispatch={dispatch}
                     activeDigit={activeDigit}
+                    isCommiting={isCommiting}
                   ></BoardTableRow>
                 ))}
               </TableBody>
@@ -238,18 +297,19 @@ export const App: React.FC = () => {
               key={`digit_${idx + 1}`}
               value={idx + 1}
               selected={activeDigit === idx + 1}
-              sx={{ width: "20%", aspectRatio: 1 }}
               onChange={handleActiveDigitChange}
+              sx={{ width: "20%", aspectRatio: 1 }}
               color="primary"
             >
               {idx + 1}
             </ToggleButton>
           ))}
           <ToggleButton
-            value={10}
+            value={!isCommiting}
+            selected={!isCommiting}
+            onChange={handleIsCommitingChange}
             sx={{ width: "20%", aspectRatio: 1 }}
             color="primary"
-            disabled
           >
             <AppRegistrationIcon />
           </ToggleButton>
@@ -261,11 +321,12 @@ export const App: React.FC = () => {
 
 const BoardTableRow: React.FC<{
   rowIdx: number;
-  boardRow: RepNine<null | Digit>;
+  boardRow: BoardRow;
   dispatch: React.Dispatch<BoardAction>;
   activeDigit: null | Digit;
+  isCommiting: boolean;
 }> = (props) => {
-  const { rowIdx, boardRow, dispatch, activeDigit } = props;
+  const { rowIdx, boardRow, dispatch, activeDigit, isCommiting } = props;
 
   return (
     <TableRow>
@@ -277,6 +338,7 @@ const BoardTableRow: React.FC<{
             value={boardRow[colIdx]}
             dispatch={dispatch}
             activeDigit={activeDigit}
+            isCommiting={isCommiting}
           ></BoardButton>
         </TableCell>
       ))}
@@ -287,23 +349,32 @@ const BoardTableRow: React.FC<{
 const BoardButton: React.FC<{
   rowIdx: number;
   colIdx: number;
-  value: null | Digit;
+  value: number;
   dispatch: React.Dispatch<BoardAction>;
   activeDigit: null | Digit;
+  isCommiting: boolean;
 }> = (props) => {
-  const { rowIdx, colIdx, value, dispatch, activeDigit } = props;
+  const { rowIdx, colIdx, value, dispatch, activeDigit, isCommiting } = props;
+
+  const digit = getDigit(value);
 
   const handleClick = React.useCallback(
     (e: React.BaseSyntheticEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (activeDigit === null) return;
-      dispatch({ type: "digit_toggle", rowIdx, colIdx, activeDigit });
+      dispatch({
+        type: "digit_toggle",
+        rowIdx,
+        colIdx,
+        activeDigit,
+        isCommiting,
+      });
     },
-    [dispatch, rowIdx, colIdx, activeDigit],
+    [dispatch, rowIdx, colIdx, activeDigit, isCommiting],
   );
 
-  const variant = value === activeDigit ? "contained" : "text";
+  const variant = digit === activeDigit ? "contained" : "text";
 
   return (
     <Button
@@ -312,7 +383,27 @@ const BoardButton: React.FC<{
       variant={variant}
       sx={{ minWidth: "1em", padding: 0 }}
     >
-      {value}
+      {digit ?? <MarkerText markerBits={getMarkerBits(value)} />}
     </Button>
+  );
+};
+
+const MarkerText: React.FC<{
+  markerBits: number;
+}> = (props) => {
+  const { markerBits } = props;
+
+  return (
+    <pre style={{ lineHeight: "1em" }}>
+      {(markerBits | (1 << 9))
+        .toString(2)
+        .slice(1)
+        .split("")
+        .reverse()
+        .map((c, i) => (c === "0" ? " " : i + 1))
+        .join("")
+        .match(/[ 1-9]{3}/g)
+        ?.join("\n")}
+    </pre>
   );
 };
